@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mecânica CAD Torno - Desenho Técnico e Usinagem Mecânica</title>
+  
+  <!-- Tailwind CSS via CDN para estilização moderna e rápida -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Bibliotecas Externas para 3D e PDF (Trabalham direto no navegador) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Ícones Lucide -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col overflow-hidden font-sans select-none">
+
+  <!-- ================= BARRA SUPERIOR (NAVBAR) ================= -->
+  <header id="app-navbar" class="h-16 border-b border-slate-800 bg-slate-900 px-4 flex items-center justify-between shrink-0 transition-colors">
+    <!-- Logo e Título -->
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-gradient-to-tr from-sky-600 to-cyan-500 text-white font-bold flex items-center justify-center shadow-md shadow-sky-500/20">
+        <i data-lucide="wrench" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-extrabold text-lg tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">
+            Mecânica CAD Torno
+          </h1>
+          <span class="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-sky-500/10 text-sky-400 border border-sky-500/20">
+            HTML / JS PURO
+          </span>
+        </div>
+        <p id="nav-part-subtitle" class="text-xs text-slate-400 truncate max-w-xs font-mono">
+          CAD-TORNO-001 • Eixo Escalonado
+        </p>
+      </div>
+    </div>
+
+    <!-- Ações de Arquivo Centrais -->
+    <div class="hidden md:flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-lg border border-slate-700/60 text-xs">
+      <button id="btn-new-part" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-slate-700 transition" title="Novo Projeto">
+        <i data-lucide="file-plus" class="w-3.5 h-3.5 text-sky-400"></i>
+        <span>Novo</span>
+      </button>
+
+      <label class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-slate-700 transition cursor-pointer" title="Abrir Arquivo JSON">
+        <i data-lucide="folder-open" class="w-3.5 h-3.5 text-amber-400"></i>
+        <span>Abrir</span>
+        <input type="file" id="input-open-file" accept=".json" class="hidden">
+      </label>
+
+      <button id="btn-save-part" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-slate-700 transition" title="Salvar Projeto (.json)">
+        <i data-lucide="save" class="w-3.5 h-3.5 text-emerald-400"></i>
+        <span>Salvar</span>
+      </button>
+
+      <div class="w-[1px] h-4 bg-slate-700 mx-1"></div>
+
+      <button id="btn-undo" class="p-1.5 rounded-md hover:bg-slate-700 disabled:opacity-30 transition" title="Desfazer (Ctrl+Z)">
+        <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+      </button>
+      <button id="btn-redo" class="p-1.5 rounded-md hover:bg-slate-700 disabled:opacity-30 transition" title="Refazer (Ctrl+Y)">
+        <i data-lucide="redo-2" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+
+    <!-- Ferramentas e Exportação -->
+    <div class="flex items-center gap-2 text-xs">
+      <button id="btn-open-library" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 font-medium rounded-lg border border-slate-700 hover:border-sky-500 transition">
+        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+        <span>Biblioteca</span>
+      </button>
+
+      <button id="btn-open-sheet" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 font-medium rounded-lg border border-slate-700 hover:border-sky-500 transition">
+        <i data-lucide="file-text" class="w-3.5 h-3.5 text-sky-400"></i>
+        <span>Ficha & CNC</span>
+      </button>
+
+      <button id="btn-toggle-unit" class="px-2 py-1 font-bold rounded-lg border border-slate-700 hover:bg-slate-800 transition" title="Alternar mm / polegadas">
+        MM (mm)
+      </button>
+
+      <button id="btn-toggle-theme" class="p-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-amber-400 transition" title="Alternar Modo Fundo Claro / Escuro">
+        <i data-lucide="sun" class="w-4 h-4"></i>
+      </button>
+
+      <!-- Dropdown Exportar -->
+      <div class="relative">
+        <button id="btn-export-dropdown" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold bg-sky-600 hover:bg-sky-500 text-white shadow-sm transition">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>Exportar</span>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+        </button>
+
+        <div id="export-menu" class="hidden absolute right-0 mt-2 w-56 rounded-xl border border-slate-800 bg-slate-900 text-slate-200 shadow-2xl py-2 z-50">
+          <div class="px-3 py-1 text-[10px] uppercase font-bold tracking-wider text-slate-400">Formatos Técnicos</div>
+          <button id="export-pdf" class="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-sky-500/10 hover:text-sky-400">
+            <span class="w-7 h-7 rounded bg-red-500/10 text-red-500 flex items-center justify-center font-bold text-[10px]">PDF</span>
+            <div><div class="font-medium">Desenho Técnico PDF</div><div class="text-[10px] text-slate-400">Folha A4 ABNT com carimbo</div></div>
+          </button>
+          <button id="export-dxf" class="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-sky-500/10 hover:text-sky-400">
+            <span class="w-7 h-7 rounded bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold text-[10px]">DXF</span>
+            <div><div class="font-medium">Arquivo CAD DXF (R12)</div><div class="text-[10px] text-slate-400">AutoCAD, SolidWorks, QCad</div></div>
+          </button>
+          <button id="export-svg" class="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-sky-500/10 hover:text-sky-400">
+            <span class="w-7 h-7 rounded bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold text-[10px]">SVG</span>
+            <div><div class="font-medium">Vetor Técnico SVG</div><div class="text-[10px] text-slate-400">Alta resolução para web/doc</div></div>
+          </button>
+          <button id="export-cnc" class="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-sky-500/10 hover:text-sky-400">
+            <span class="w-7 h-7 rounded bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-[10px]">CNC</span>
+            <div><div class="font-medium">Código G Torno CNC (.nc)</div><div class="text-[10px] text-slate-400">Ciclo G71 Fanuc / Mach3</div></div>
+          </button>
+          <div class="h-[1px] bg-slate-800 my-1"></div>
+          <button id="export-print" class="w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-sky-500/10 hover:text-sky-400">
+            <i data-lucide="printer" class="w-4 h-4 text-slate-400 ml-1.5"></i>
+            <span>Imprimir Desenho Técnico</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= CORPO PRINCIPAL ================= -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Menu Lateral Esquerdo (Sidebar) -->
+    <nav class="w-16 md:w-56 border-r border-slate-800 bg-slate-900 flex flex-col justify-between shrink-0 select-none">
+      <div class="p-2 space-y-1.5">
+        <div class="hidden md:block px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Módulos CAD</div>
+
+        <button data-nav-mode="generator" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold bg-sky-500 text-white shadow-md shadow-sky-500/20">
+          <i data-lucide="compass" class="w-4 h-4 shrink-0"></i>
+          <span class="hidden md:inline">Gerador de Peças</span>
+        </button>
+
+        <button data-nav-mode="cad2d" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          <i data-lucide="pen-tool" class="w-4 h-4 shrink-0"></i>
+          <span class="hidden md:inline">Editor CAD 2D</span>
+        </button>
+
+        <button data-nav-mode="view3d" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          <i data-lucide="box" class="w-4 h-4 shrink-0"></i>
+          <span class="hidden md:inline">Visualização 3D</span>
+        </button>
+
+        <button data-nav-mode="calculator" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          <i data-lucide="calculator" class="w-4 h-4 shrink-0"></i>
+          <span class="hidden md:inline">Calculadora Usinagem</span>
+        </button>
+
+        <div class="h-[1px] bg-slate-800 my-2"></div>
+        <div class="hidden md:block px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Oficina & Produção</div>
+
+        <button id="nav-btn-library" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          <i data-lucide="folder-archive" class="w-4 h-4 text-amber-400 shrink-0"></i>
+          <span class="hidden md:inline">Biblioteca de Peças</span>
+        </button>
+
+        <button id="nav-btn-sheet" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 hover:bg-slate-800/60">
+          <i data-lucide="file-text" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+          <span class="hidden md:inline">Ficha & Código G CNC</span>
+        </button>
+      </div>
+
+      <div class="p-3 border-t border-slate-800 text-[11px] text-slate-400 hidden md:block">
+        <div class="flex items-center gap-2 text-slate-300 font-semibold mb-0.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>Torno Mecânico & CNC</span>
+        </div>
+        <span class="text-[10px] text-slate-500">Normas ABNT / ISO 2768</span>
+      </div>
+    </nav>
+
+    <!-- Área de Trabalho Central -->
+    <main class="flex-1 flex overflow-hidden relative">
+
+      <!-- MODO 1: GERADOR PARAMÉTRICO DE PEÇAS -->
+      <section id="view-generator" class="view-panel flex-1 flex flex-col md:flex-row overflow-hidden">
+        <!-- Painel Lateral Paramétrico -->
+        <div class="w-full md:w-[380px] lg:w-[420px] h-full shrink-0 flex flex-col bg-slate-900 border-r border-slate-800">
+          <!-- Cabeçalho do Gerador -->
+          <div class="p-4 border-b border-slate-800 bg-slate-950/60">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <i data-lucide="wrench" class="w-4 h-4 text-sky-400"></i>
+                <h2 class="font-bold text-sm text-white">Gerador Paramétrico</h2>
+              </div>
+              <button id="btn-load-prompt-example" class="flex items-center gap-1 px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-[11px] font-semibold border border-sky-500/30">
+                <i data-lucide="sparkles" class="w-3 h-3"></i>
+                <span>Exemplo do Torno</span>
+              </button>
+            </div>
+
+            <!-- Resumo Dimensional -->
+            <div class="grid grid-cols-3 gap-2 text-center text-xs">
+              <div class="bg-slate-800/80 p-1.5 rounded-lg border border-slate-700/50">
+                <span class="text-[10px] text-slate-400 block">Comprimento</span>
+                <span id="stat-total-length" class="font-bold font-mono text-sky-400">100 mm</span>
+              </div>
+              <div class="bg-slate-800/80 p-1.5 rounded-lg border border-slate-700/50">
+                <span class="text-[10px] text-slate-400 block">Maior Ø</span>
+                <span id="stat-max-diameter" class="font-bold font-mono text-emerald-400">Ø30 mm</span>
+              </div>
+              <div class="bg-slate-800/80 p-1.5 rounded-lg border border-slate-700/50">
+                <span class="text-[10px] text-slate-400 block">Tarugo Bruto</span>
+                <span id="stat-stock-size" class="font-bold font-mono text-amber-400">Ø35x105</span>
+              </div>
+            </div>
+
+            <div id="geo-validation-alert" class="hidden mt-2 p-2 rounded-lg bg-red-950/60 border border-red-800 text-red-300 text-xs"></div>
+          </div>
+
+          <!-- Abas do Gerador -->
+          <div class="flex border-b border-slate-800 bg-slate-900/80 text-xs">
+            <button data-gen-tab="segments" class="gen-tab-btn flex-1 py-2.5 font-bold border-b-2 border-sky-500 text-sky-400 bg-slate-800/50">
+              Degraus (<span id="count-segments">2</span>)
+            </button>
+            <button data-gen-tab="bores" class="gen-tab-btn flex-1 py-2.5 font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+              Furos (<span id="count-bores">1</span>)
+            </button>
+            <button data-gen-tab="info" class="gen-tab-btn flex-1 py-2.5 font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+              Dados Peça
+            </button>
+          </div>
+
+          <!-- Conteúdo com Scroll -->
+          <div class="flex-1 overflow-y-auto p-4 space-y-3">
+            <!-- ABA 1: Degraus -->
+            <div id="gen-tab-segments" class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase text-slate-400">Degraus e Seções Cilíndricas</span>
+                <button id="btn-add-segment" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                  <span>Adicionar Degrau</span>
+                </button>
+              </div>
+              <div id="segments-list" class="space-y-3"></div>
+            </div>
+
+            <!-- ABA 2: Furos Internos -->
+            <div id="gen-tab-bores" class="hidden space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase text-slate-400">Furações e Mandrilamento</span>
+                <button id="btn-add-bore" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                  <span>Adicionar Furo</span>
+                </button>
+              </div>
+              <div id="bores-list" class="space-y-3"></div>
+            </div>
+
+            <!-- ABA 3: Dados da Peça -->
+            <div id="gen-tab-info" class="hidden space-y-3 text-xs">
+              <div>
+                <label class="text-slate-400 block mb-1">Nome da Peça</label>
+                <input type="text" id="input-part-name" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-medium">
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-slate-400 block mb-1">Nº do Desenho</label>
+                  <input type="text" id="input-part-number" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-white">
+                </div>
+                <div>
+                  <label class="text-slate-400 block mb-1">Desenhista</label>
+                  <input type="text" id="input-part-designer" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white">
+                </div>
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Material de Fabricação</label>
+                <select id="select-part-material" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white">
+                  <option value="Aço ABNT / SAE 1045">Aço ABNT / SAE 1045</option>
+                  <option value="Aço ABNT / SAE 1020">Aço ABNT / SAE 1020</option>
+                  <option value="Aço Liga SAE 4140 Beneficiado">Aço Liga SAE 4140 Beneficiado</option>
+                  <option value="Aço Inox AISI 304 Austenítico">Aço Inox AISI 304 Austenítico</option>
+                  <option value="Alumínio 6061-T6 Usinável">Alumínio 6061-T6 Usinável</option>
+                  <option value="Latão CLA / C36000">Latão CLA / C36000</option>
+                  <option value="Ferro Fundido Cinzento FC-25">Ferro Fundido Cinzento FC-25</option>
+                  <option value="Bronze Fosforoso TM-23">Bronze Fosforoso TM-23</option>
+                </select>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-slate-400 block mb-1">Tarugo Ø (mm)</label>
+                  <input type="number" id="input-stock-dia" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-white">
+                </div>
+                <div>
+                  <label class="text-slate-400 block mb-1">Tarugo Comp. (mm)</label>
+                  <input type="number" id="input-stock-len" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-white">
+                </div>
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Notas de Fabricação</label>
+                <textarea id="input-part-notes" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white text-xs"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Área Técnica Gráfica (2D / 3D) -->
+        <div class="flex-1 flex flex-col overflow-hidden relative">
+          <!-- Barra de visualização no gerador -->
+          <div class="h-12 border-b border-slate-800 px-4 flex items-center justify-between text-xs bg-slate-900/90 backdrop-blur z-10">
+            <div class="flex items-center gap-1 bg-slate-800 p-1 rounded-lg">
+              <button id="btn-view-half-section" class="view-2d-mode px-3 py-1 rounded-md font-semibold bg-slate-700 text-sky-400 shadow-xs">
+                Meia-Seção ABNT
+              </button>
+              <button id="btn-view-full-profile" class="view-2d-mode px-3 py-1 rounded-md text-slate-400 hover:text-white">
+                Vista Externa
+              </button>
+              <button id="btn-view-side-proj" class="view-2d-mode px-3 py-1 rounded-md text-slate-400 hover:text-white">
+                Vista Lateral
+              </button>
+            </div>
+
+            <!-- Alternador Rápido 2D / 3D -->
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1 bg-slate-800 p-1 rounded-lg">
+                <button id="btn-toggle-canvas-2d" class="px-3 py-1 rounded-md font-bold bg-sky-600 text-white flex items-center gap-1">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                  <span>Desenho 2D</span>
+                </button>
+                <button id="btn-toggle-canvas-3d" class="px-3 py-1 rounded-md font-medium text-slate-300 hover:text-white flex items-center gap-1">
+                  <i data-lucide="box" class="w-3.5 h-3.5"></i>
+                  <span>Modelo 3D</span>
+                </button>
+              </div>
+
+              <!-- Controles de Zoom -->
+              <div class="flex items-center gap-1 border-l border-slate-700 pl-2">
+                <button id="btn-zoom-in" class="p-1 rounded hover:bg-slate-800 text-slate-300"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></button>
+                <span id="label-zoom-lvl" class="font-mono text-[11px] min-w-[35px] text-center">100%</span>
+                <button id="btn-zoom-out" class="p-1 rounded hover:bg-slate-800 text-slate-300"><i data-lucide="zoom-out" class="w-3.5 h-3.5"></i></button>
+                <button id="btn-zoom-reset" class="p-1 rounded hover:bg-slate-800 text-sky-400" title="Ajustar à tela"><i data-lucide="maximize-2" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Prancheta SVG 2D -->
+          <div id="container-svg-2d" class="flex-1 relative overflow-hidden bg-slate-950 cursor-grab active:cursor-grabbing">
+            <svg id="svg-technical-drawing" width="100%" height="100%" class="w-full h-full"></svg>
+            <div class="absolute bottom-3 right-3 text-[11px] px-2.5 py-1.5 rounded-lg bg-black/60 text-white/80 backdrop-blur pointer-events-none">
+              Arrastar: Mover • Roda: Zoom
+            </div>
+          </div>
+
+          <!-- Canvas 3D Three.js no Gerador -->
+          <div id="container-three-3d" class="hidden flex-1 relative overflow-hidden bg-slate-950 cursor-grab active:cursor-grabbing">
+            <div id="threejs-mount" class="w-full h-full"></div>
+            <div class="absolute top-3 left-3 flex gap-2 z-10">
+              <button id="btn-toggle-cutaway" class="px-2.5 py-1 rounded-md bg-slate-900/80 border border-slate-700 text-xs font-semibold hover:border-amber-400 text-amber-400 backdrop-blur">
+                Meia-Seção 3D (Corte)
+              </button>
+              <button id="btn-toggle-chuck" class="px-2.5 py-1 rounded-md bg-slate-900/80 border border-slate-700 text-xs font-semibold hover:border-sky-400 text-sky-400 backdrop-blur">
+                Placa de Castanhas
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MODO 2: EDITOR CAD 2D -->
+      <section id="view-cad2d" class="view-panel hidden flex-1 flex flex-col overflow-hidden bg-slate-900">
+        <div class="h-12 border-b border-slate-800 px-4 flex items-center justify-between text-xs bg-slate-900">
+          <div class="flex items-center gap-1 bg-slate-800 p-1 rounded-lg">
+            <button data-cad-tool="select" class="cad-tool-btn p-1.5 rounded text-white bg-sky-500" title="Selecionar"><i data-lucide="mouse-pointer" class="w-4 h-4"></i></button>
+            <button data-cad-tool="line" class="cad-tool-btn p-1.5 rounded hover:bg-slate-700 text-slate-300" title="Linha Técnica"><i data-lucide="minus" class="w-4 h-4"></i></button>
+            <button data-cad-tool="centerline" class="cad-tool-btn p-1.5 rounded hover:bg-slate-700 text-red-400 font-mono font-bold" title="Linha de Centro">CL</button>
+            <button data-cad-tool="circle" class="cad-tool-btn p-1.5 rounded hover:bg-slate-700 text-slate-300" title="Círculo"><i data-lucide="circle" class="w-4 h-4"></i></button>
+            <button data-cad-tool="rect" class="cad-tool-btn p-1.5 rounded hover:bg-slate-700 text-slate-300" title="Retângulo"><i data-lucide="square" class="w-4 h-4"></i></button>
+            <button data-cad-tool="dimension" class="cad-tool-btn p-1.5 rounded hover:bg-slate-700 text-slate-300 font-bold" title="Cota Linear">↔ Cota</button>
+            <button data-cad-tool="eraser" class="cad-tool-btn p-1.5 rounded hover:bg-slate-700 text-red-400" title="Borracha"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-cad-snap" class="px-2.5 py-1 rounded bg-sky-500/10 border border-sky-500 text-sky-400 font-semibold">Snap 10mm</button>
+            <button id="btn-cad-ortho" class="px-2.5 py-1 rounded border border-slate-700 text-slate-400 font-semibold">Ortho</button>
+          </div>
+        </div>
+        <div class="flex-1 flex overflow-hidden">
+          <div class="flex-1 relative bg-slate-950 overflow-hidden cursor-crosshair">
+            <svg id="svg-cad-editor" width="100%" height="100%" class="w-full h-full"></svg>
+            <div id="cad-coords" class="absolute bottom-3 left-3 bg-black/70 backdrop-blur px-3 py-1 rounded font-mono text-xs text-white">X: 0 mm | Y: 0 mm</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MODO 3: VISUALIZADOR 3D COMPLETO -->
+      <section id="view-view3d" class="view-panel hidden flex-1 flex flex-col overflow-hidden bg-slate-950">
+        <div class="h-12 border-b border-slate-800 px-4 flex items-center justify-between text-xs bg-slate-900">
+          <div class="flex items-center gap-1 bg-slate-800 p-1 rounded-lg">
+            <button data-3d-preset="iso" class="px-3 py-1 rounded hover:bg-slate-700 font-medium">Isométrica</button>
+            <button data-3d-preset="front" class="px-3 py-1 rounded hover:bg-slate-700 font-medium">Frontal</button>
+            <button data-3d-preset="top" class="px-3 py-1 rounded hover:bg-slate-700 font-medium">Topo</button>
+            <button data-3d-preset="side" class="px-3 py-1 rounded hover:bg-slate-700 font-medium">Lateral</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-full-cutaway" class="px-3 py-1 rounded border border-amber-500/40 text-amber-400 font-semibold">Meia-Seção 3D</button>
+            <button id="btn-full-chuck" class="px-3 py-1 rounded border border-sky-500/40 text-sky-400 font-semibold">Placa de Castanhas</button>
+            <button id="btn-full-wireframe" class="px-3 py-1 rounded border border-purple-500/40 text-purple-400 font-semibold">Aramado</button>
+          </div>
+        </div>
+        <div id="full-threejs-mount" class="flex-1 w-full h-full cursor-grab active:cursor-grabbing"></div>
+      </section>
+
+      <!-- MODO 4: CALCULADORA DE USINAGEM -->
+      <section id="view-calculator" class="view-panel hidden flex-1 flex flex-col overflow-hidden bg-slate-900">
+        <!-- Navegação da Calculadora -->
+        <div class="flex border-b border-slate-800 bg-slate-950 text-xs px-4">
+          <button data-calc-tab="rpm" class="calc-tab-btn py-3 px-4 font-bold border-b-2 border-sky-500 text-sky-400">Rotação & Vc</button>
+          <button data-calc-tab="time" class="calc-tab-btn py-3 px-4 font-medium border-b-2 border-transparent text-slate-400">Avanço & Tempo</button>
+          <button data-calc-tab="taper" class="calc-tab-btn py-3 px-4 font-medium border-b-2 border-transparent text-slate-400">Conicidade & Ângulo</button>
+          <button data-calc-tab="thread" class="calc-tab-btn py-3 px-4 font-medium border-b-2 border-transparent text-slate-400">Roscas Métricas</button>
+          <button data-calc-tab="passes" class="calc-tab-btn py-3 px-4 font-medium border-b-2 border-transparent text-slate-400">Passes Radiais</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full space-y-6 text-xs">
+          <!-- CALC: RPM -->
+          <div id="calc-tab-rpm" class="space-y-4">
+            <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="text-slate-400 block mb-1">Material da Peça:</label>
+                <select id="calc-mat-select" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white"></select>
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Material da Ferramenta:</label>
+                <select id="calc-tool-select" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                  <option value="carbide">Metal Duro (Pastilha)</option>
+                  <option value="hss">Aço Rápido (HSS)</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Operação:</label>
+                <select id="calc-op-select" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white">
+                  <option value="rough">Desbaste</option>
+                  <option value="finish">Acabamento</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700 space-y-1">
+                <label class="font-bold text-slate-300 block">Diâmetro de Usinagem (D):</label>
+                <div class="relative">
+                  <input type="number" id="calc-rpm-dia" value="30" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 font-mono text-base font-bold text-white">
+                  <span class="absolute right-3 top-2 text-slate-400 font-mono">mm</span>
+                </div>
+              </div>
+              <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700 space-y-1">
+                <label class="font-bold text-slate-300 block">Velocidade de Corte (Vc):</label>
+                <div class="relative">
+                  <input type="number" id="calc-rpm-vc" value="190" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 font-mono text-base font-bold text-sky-400">
+                  <span class="absolute right-3 top-2 text-slate-400 font-mono">m/min</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-gradient-to-br from-sky-950 to-slate-900 border-2 border-sky-500/40 text-center space-y-2">
+              <span class="text-xs uppercase font-bold text-sky-400">Rotação Calculada do Eixo-Árvore (n)</span>
+              <div class="text-5xl font-black font-mono text-white" id="calc-result-rpm">2016 <span class="text-lg text-sky-400 font-bold">RPM</span></div>
+              <div class="text-slate-400 text-[11px] font-mono">Fórmula: n = (1000 × Vc) / (π × D)</div>
+            </div>
+          </div>
+
+          <!-- CALC: TEMPO -->
+          <div id="calc-tab-time" class="hidden space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+                <label class="text-slate-400 block mb-1">Rotação (n):</label>
+                <input type="number" id="calc-time-rpm" value="2000" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+              <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+                <label class="text-slate-400 block mb-1">Avanço (f em mm/rot):</label>
+                <input type="number" step="0.05" id="calc-time-feed" value="0.25" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+              <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+                <label class="text-slate-400 block mb-1">Comprimento (L em mm):</label>
+                <input type="number" id="calc-time-len" value="100" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-center">
+              <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-slate-400 block">Velocidade de Avanço (Vf)</span>
+                <span id="calc-result-vf" class="text-3xl font-black font-mono text-emerald-400">500 mm/min</span>
+              </div>
+              <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-slate-400 block">Tempo de Corte Estimado (Th)</span>
+                <span id="calc-result-time" class="text-3xl font-black font-mono text-white">12s</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CALC: CONICIDADE -->
+          <div id="calc-tab-taper" class="hidden space-y-4">
+            <div class="grid grid-cols-3 gap-3 p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+              <div>
+                <label class="text-slate-400 block mb-1">Diâmetro Maior (D):</label>
+                <input type="number" id="calc-taper-D" value="35" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Diâmetro Menor (d):</label>
+                <input type="number" id="calc-taper-d" value="25" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Comprimento do Cone (L):</label>
+                <input type="number" id="calc-taper-L" value="50" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+            </div>
+            <div class="p-5 rounded-2xl bg-amber-950/60 border-2 border-amber-500/40 text-center space-y-2">
+              <span class="text-xs uppercase font-bold text-amber-400">Inclinação da Espera / Carro Superior (α/2)</span>
+              <div id="calc-result-angle" class="text-4xl font-black font-mono text-white">5° 42' 38"</div>
+              <p class="text-slate-300 text-[11px]">Gire a base graduada do carro superior exatamente neste ângulo para tornear o cone.</p>
+            </div>
+          </div>
+
+          <!-- CALC: ROSCAS -->
+          <div id="calc-tab-thread" class="hidden space-y-4">
+            <div class="p-4 rounded-xl bg-slate-800/60 border border-slate-700 grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-slate-400 block mb-1">Rosca Métrica:</label>
+                <select id="calc-thread-select" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono font-bold"></select>
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Passo (P em mm):</label>
+                <input type="number" step="0.25" id="calc-thread-pitch" value="2.0" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-slate-400 block">Broca Pré-Furo (Macho)</span>
+                <span id="calc-result-drill" class="text-2xl font-bold font-mono text-emerald-400">Ø14.0 mm</span>
+              </div>
+              <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-slate-400 block">Diâmetro Primitivo (d2)</span>
+                <span id="calc-result-d2" class="text-2xl font-bold font-mono text-sky-400">14.70 mm</span>
+              </div>
+              <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-slate-400 block">Diâmetro Menor / Fundo (d1)</span>
+                <span id="calc-result-d1" class="text-2xl font-bold font-mono text-amber-400">13.55 mm</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CALC: PASSES -->
+          <div id="calc-tab-passes" class="hidden space-y-4">
+            <div class="grid grid-cols-3 gap-3 p-4 rounded-xl bg-slate-800/60 border border-slate-700">
+              <div>
+                <label class="text-slate-400 block mb-1">Diâmetro Inicial:</label>
+                <input type="number" id="calc-pass-d-init" value="40" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Diâmetro Final:</label>
+                <input type="number" id="calc-pass-d-final" value="28" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Passe Radial (ap):</label>
+                <input type="number" step="0.5" id="calc-pass-ap" value="2.0" class="w-full bg-slate-900 border border-slate-700 rounded p-2 font-mono font-bold text-white">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-center">
+              <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-slate-400 block">Redução no Ø por Passe (2 × ap)</span>
+                <span id="calc-result-delta-d" class="text-3xl font-black font-mono text-sky-400">4.0 mm</span>
+              </div>
+              <div class="p-4 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-slate-400 block">Número Estimado de Passes</span>
+                <span id="calc-result-passes" class="text-3xl font-black font-mono text-emerald-400">3 passes</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ================= MODAL BIBLIOTECA DE PEÇAS ================= -->
+  <div id="modal-library" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+    <div class="w-full max-w-4xl max-h-[85vh] rounded-2xl flex flex-col bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-5 h-5 text-amber-400"></i>
+          <h2 class="font-bold text-base text-white">Biblioteca de Modelos Mecânicos para Torno</h2>
+        </div>
+        <button id="modal-library-close" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="library-parts-grid" class="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs"></div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL FICHA TÉCNICA & CNC ================= -->
+  <div id="modal-sheet" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+    <div class="w-full max-w-4xl max-h-[90vh] rounded-2xl flex flex-col bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="file-text" class="w-5 h-5 text-sky-400"></i>
+          <h2 class="font-bold text-base text-white">Ficha Técnica & Roteiro de Usinagem CNC</h2>
+        </div>
+        <button id="modal-sheet-close" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="flex border-b border-slate-800 bg-slate-950/60 text-xs px-4">
+        <button id="sheet-tab-btn-process" class="py-2.5 px-4 font-bold border-b-2 border-sky-500 text-sky-400">Ficha de Processo</button>
+        <button id="sheet-tab-btn-gcode" class="py-2.5 px-4 font-medium border-b-2 border-transparent text-slate-400">Programa G-Code CNC (.nc)</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-5 text-xs">
+        <div id="sheet-tab-content-process" class="space-y-4">
+          <div id="sheet-process-summary" class="p-4 rounded-xl border border-slate-700 bg-slate-800/60"></div>
+          <div class="space-y-2">
+            <span class="font-bold text-sky-400 block uppercase">Sequência Operacional Recomendada:</span>
+            <div id="sheet-process-steps" class="space-y-2"></div>
+          </div>
+        </div>
+        <div id="sheet-tab-content-gcode" class="hidden space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">Ciclo G71 Fanuc / Mach3 com múltiplos passes e acabamento G70.</span>
+            <div class="flex gap-2">
+              <button id="btn-copy-gcode" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold border border-slate-700 flex items-center gap-1.5">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span id="label-copy-gcode">Copiar</span>
+              </button>
+              <button id="btn-download-gcode" class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-semibold flex items-center gap-1.5">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                <span>Baixar .NC</span>
+              </button>
+            </div>
+          </div>
+          <pre id="pre-gcode" class="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-emerald-400 leading-relaxed overflow-x-auto max-h-[55vh]"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // Inicializar ícones Lucide
+    lucide.createIcons();
+  </script>
+</body>
+</html>
